@@ -1,5 +1,5 @@
 #
-# Playbook prepares server for avisimport
+# Playbook prepares server for dock swarm
 #
 
 - import_playbook: docker.yml
