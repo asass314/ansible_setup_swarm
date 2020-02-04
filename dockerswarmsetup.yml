@@ -1,0 +1,111 @@
+#
+# Playbook prepares server for avisimport
+#
+
+- import_playbook: docker.yml
+
+- name: Prepare server for avisimport
+  hosts: meta-ansible_group_docker_swarm
+  become: true
+
+  vars:
+   -  swarmmaster:
+        - "olxdedevswarm01"
+        - "olxdeintswarm01"
+        - "olxdeprdswarm01"
+   -  workernodes:
+        - "olxdedevswarm02"
+        - "olxdedevswarm03"
+        - "olxdeintswarm02"
+        - "olxdeintswarm03"
+        - "olxdeprdswarm02"
+        - "olxdeprdswarm03"
+
+  tasks:
+
+  - name: Open port for docker swarm
+    firewalld:
+      port: 2377/tcp
+      permanent: true
+      state: enabled
+
+  - name: Open port for docker swarm
+    firewalld:
+      port: 7946/tcp
+      permanent: true
+      state: enabled
+
+  - name: Open port for docker swarm
+    firewalld:
+      port: 7946/udp
+      permanent: true
+      state: enabled
+
+  - name: Open port for docker swarm
+    firewalld:
+      port: 4789/tcp
+      permanent: true
+      state: enabled
+
+  - name: Open port for avisimport
+    firewalld:
+      port: 8080/tcp
+      permanent: true
+      state: enabled
+
+  - name: Open port for ssh
+    firewalld:
+      service: ssh
+      permanent: true
+      state: enabled
+
+  - name: Reload firewall
+    service:
+      name: firewalld
+      state: reloaded
+
+  - name: Remove Swarm
+    shell: docker swarm leave --force
+    ignore_errors: yes
+
+  - name: Swarm master init - copy script
+    copy:
+      content: " #Swarm init\n
+echo Setup swarm master\n
+docker swarm init >/root/swarm_join.txt\n
+cat /root/swarm_join.txt | tail  -n 6 | head -n 4 >/root/swarm_join.sh\n
+chmod 755 /root/swarm_join.sh\n
+echo Setup docker network avisimport\n
+docker network create --driver overlay avisimport\n
+"
+      dest: /root/swarm_master_init.sh
+      owner: root
+      group: root
+      mode: '0700'
+    when: inventory_hostname in swarmmaster
+
+  - name: Swarm - init master - execute script
+    shell: bash /root/swarm_master_init.sh
+    when:  inventory_hostname in swarmmaster
+    ignore_errors: yes
+
+  - name: Swarm -  copy the generated join script to tmp
+    fetch:
+      src: /root/swarm_join.sh
+      dest: /tmp/
+      flat: yes
+    when:  inventory_hostname in swarmmaster
+
+  - name:  Swarm - copy the join script to worker nodes
+    copy:
+      src: /tmp/swarm_join.sh
+      dest: /root/swarm_join.sh
+      owner: root
+      group: root
+      mode: '0700'
+      remote_src: no
+    when: inventory_hostname in workernodes
+
+  - name: Swarm join - execute script
+    shell: bash /root/swarm_join.sh
+    when: inventory_hostname in workernodes
