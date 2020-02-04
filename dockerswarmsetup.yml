@@ -4,7 +4,7 @@
 
 - import_playbook: docker.yml
 
-- name: Prepare server for avisimport
+- name: Prepare server for docker swarm
   hosts: meta-ansible_group_docker_swarm
   become: true
 
